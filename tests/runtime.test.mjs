@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { buildEnv, installFakeCodex } from "./fake-codex-fixture.mjs";
-import { cleanEnv, initGitRepo, makeTempDir, run } from "./helpers.mjs";
+import { cleanEnv, initGitRepo, makeTempDir, run, symlinkOrSkip } from "./helpers.mjs";
 import { clearBrokerSession, loadBrokerSession, saveBrokerSession } from "../plugins/codex/scripts/lib/broker-lifecycle.mjs";
 import { resolveStateDir } from "../plugins/codex/scripts/lib/state.mjs";
 
@@ -45,12 +45,14 @@ test("setup reports ready when fake codex is installed and authenticated", () =>
   assert.equal(payload.sessionRuntime.mode, "direct");
 });
 
-test("setup is ready without npm when Codex is already installed and authenticated", () => {
+test("setup is ready without npm when Codex is already installed and authenticated", (t) => {
   const repo = makeTempDir();
   const binDir = makeTempDir();
   installFakeCodex(binDir);
   initGitRepo(repo);
-  fs.symlinkSync(process.execPath, path.join(binDir, "node"));
+  if (!symlinkOrSkip(t, process.execPath, path.join(binDir, "node"))) {
+    return;
+  }
 
   const result = run("node", [SCRIPT, "setup", "--json"], {
     cwd: repo,
@@ -60,7 +62,9 @@ test("setup is ready without npm when Codex is already installed and authenticat
   assert.equal(result.status, 0, result.stderr);
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.ready, true);
-  assert.equal(payload.npm.available, false);
+  if (process.platform !== "win32") {
+    assert.equal(payload.npm.available, false);
+  }
   assert.equal(payload.codex.available, true);
   assert.equal(payload.auth.loggedIn, true);
 });

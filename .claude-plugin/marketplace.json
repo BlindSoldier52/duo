@@ -1,11 +1,11 @@
 {
-  "name": "codex-plugin-cc",
-  "owner": { "name": "Crazytieguy" },
+  "name": "duo",
+  "owner": { "name": "Duo" },
   "plugins": [
     {
       "name": "codex",
       "source": "./plugins/codex",
-      "description": "Use Codex from Claude Code for code reviews, plan reviews, and task delegation."
+      "description": "Duo collaboration tools for Codex and Claude."
     }
   ]
 }

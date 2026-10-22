@@ -1,6 +1,7 @@
 import fs from "node:fs";
+import os from "node:os";
 
-import { isPidAlive } from "./process.mjs";
+import { isPidAlive, processMatches } from "./process.mjs";
 
 const DEFAULT_RETRY_MS = 25;
 // Healthy holders keep a lock for milliseconds (state mutations) up to the
@@ -39,9 +40,25 @@ function releasePidLock(lockPath) {
  * restored with link() (atomic; fails if an even newer lock exists, in which
  * case the displaced holder is protected by the ownership check in release).
  */
-function tryAcquireOnce(lockPath, staleAgeMs) {
+function createLockFile(lockPath) {
+  const draft = `${lockPath}.new-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
+  fs.writeFileSync(draft, String(process.pid), { flag: "wx" });
   try {
-    fs.writeFileSync(lockPath, String(process.pid), { flag: "wx" });
+    fs.linkSync(draft, lockPath);
+  } finally {
+    try {
+      fs.unlinkSync(draft);
+    } catch {}
+  }
+}
+
+function bootTimeMs() {
+  return Date.now() - os.uptime() * 1000;
+}
+
+function tryAcquireOnce(lockPath, staleAgeMs, holder) {
+  try {
+    createLockFile(lockPath);
     return "acquired";
   } catch (error) {
     if (error?.code !== "EEXIST") {
@@ -59,8 +76,8 @@ function tryAcquireOnce(lockPath, staleAgeMs) {
   }
 
   const holderPid = Number.parseInt(holderRaw.trim(), 10);
-  const expired = Date.now() - holderMtimeMs > staleAgeMs;
-  if (isPidAlive(holderPid) && !expired) {
+  const expired = Date.now() - holderMtimeMs > staleAgeMs || holderMtimeMs < bootTimeMs() - 60_000;
+  if (!expired && (holder ? processMatches(holderPid, holder) : isPidAlive(holderPid))) {
     return "busy";
   }
 
@@ -102,14 +119,18 @@ function tryAcquireOnce(lockPath, staleAgeMs) {
  * between retries. Returns a release function. Throws on timeout — callers
  * must never mutate the guarded state without the lock.
  */
-export function acquirePidLockSync(lockPath, { timeoutMs, retryMs = DEFAULT_RETRY_MS, staleAgeMs = DEFAULT_STALE_AGE_MS }) {
+export function acquirePidLockSync(lockPath, { timeoutMs, retryMs = DEFAULT_RETRY_MS, staleAgeMs = DEFAULT_STALE_AGE_MS, failIfBusy = false, holder = null }) {
   const deadline = Date.now() + timeoutMs;
+  let lateRetries = 3;
   while (true) {
-    const result = tryAcquireOnce(lockPath, staleAgeMs);
+    const result = tryAcquireOnce(lockPath, staleAgeMs, holder);
     if (result === "acquired") {
       return () => releasePidLock(lockPath);
     }
-    if (Date.now() >= deadline) {
+    if (result === "busy" && failIfBusy) {
+      throw Object.assign(new Error(`Lock is already held at ${lockPath}.`), { code: "LOCK_BUSY" });
+    }
+    if (Date.now() >= deadline && !(result === "retry" && lateRetries-- > 0)) {
       throw new Error(`Timed out waiting for lock at ${lockPath}.`);
     }
     // "retry" states normally resolve on the next attempt; the short sleep
@@ -122,14 +143,15 @@ export function acquirePidLockSync(lockPath, { timeoutMs, retryMs = DEFAULT_RETR
  * Async variant: yields to the event loop between retries. Returns a release
  * function, or null on timeout — callers degrade instead of racing.
  */
-export async function acquirePidLockAsync(lockPath, { timeoutMs, retryMs = DEFAULT_RETRY_MS, staleAgeMs = DEFAULT_STALE_AGE_MS }) {
+export async function acquirePidLockAsync(lockPath, { timeoutMs, retryMs = DEFAULT_RETRY_MS, staleAgeMs = DEFAULT_STALE_AGE_MS, holder = null }) {
   const deadline = Date.now() + timeoutMs;
+  let lateRetries = 3;
   while (true) {
-    const result = tryAcquireOnce(lockPath, staleAgeMs);
+    const result = tryAcquireOnce(lockPath, staleAgeMs, holder);
     if (result === "acquired") {
       return () => releasePidLock(lockPath);
     }
-    if (Date.now() >= deadline) {
+    if (Date.now() >= deadline && !(result === "retry" && lateRetries-- > 0)) {
       return null;
     }
     await new Promise((resolve) => setTimeout(resolve, result === "busy" ? retryMs : 1));

@@ -19,11 +19,28 @@ export function readJsonFile(filePath) {
  * rename over the target. Readers see the old or new content, never a torn
  * partial write.
  */
+const RENAME_RETRIES = [20, 60, 150];
+const retryBuffer = new Int32Array(new SharedArrayBuffer(4));
+
+function renameWithRetry(from, to) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      fs.renameSync(from, to);
+      return;
+    } catch (error) {
+      if (attempt >= RENAME_RETRIES.length || !["EPERM", "EBUSY", "EACCES"].includes(error?.code)) {
+        throw error;
+      }
+      Atomics.wait(retryBuffer, 0, 0, RENAME_RETRIES[attempt]);
+    }
+  }
+}
+
 export function writeFileAtomic(filePath, data) {
   const tempFile = path.join(path.dirname(filePath), `.${path.basename(filePath)}.tmp-${process.pid}`);
   fs.writeFileSync(tempFile, data, "utf8");
   try {
-    fs.renameSync(tempFile, filePath);
+    renameWithRetry(tempFile, filePath);
   } catch (error) {
     try {
       fs.unlinkSync(tempFile);

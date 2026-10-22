@@ -51,7 +51,10 @@ function appendEnvPath(dir) {
   if (!process.env.CLAUDE_ENV_FILE || !dir) {
     return;
   }
-  fs.appendFileSync(process.env.CLAUDE_ENV_FILE, `export PATH="${dir}:$PATH"\n`, "utf8");
+  const posixDir = process.platform === "win32"
+    ? dir.replace(/^([A-Za-z]):/, (_, drive) => `/${drive.toLowerCase()}`).replace(/\\/g, "/")
+    : dir;
+  fs.appendFileSync(process.env.CLAUDE_ENV_FILE, `export PATH=${shellEscape(posixDir)}:"$PATH"\n`, "utf8");
 }
 
 function getHelpText() {

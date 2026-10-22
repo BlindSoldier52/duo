@@ -593,9 +593,10 @@ rl.on("line", (line) => {
 `;
   writeExecutable(scriptPath, source);
 
-  // On Windows, npm global binaries are invoked via .cmd wrappers.
-  // Create a codex.cmd so the fake binary is discoverable by spawn with shell: true.
   if (process.platform === "win32") {
+    const npmBin = path.join(binDir, "node_modules", "@openai", "codex", "bin");
+    fs.mkdirSync(npmBin, { recursive: true });
+    writeExecutable(path.join(npmBin, "codex.js"), source);
     const cmdWrapper = `@echo off\r\nnode "%~dp0codex" %*\r\n`;
     fs.writeFileSync(path.join(binDir, "codex.cmd"), cmdWrapper, { encoding: "utf8" });
   }

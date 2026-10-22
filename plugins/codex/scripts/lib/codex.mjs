@@ -63,7 +63,8 @@ function buildThreadParams(cwd, options = {}) {
     approvalPolicy: options.approvalPolicy ?? "never",
     sandbox: options.sandbox ?? "read-only",
     serviceName: SERVICE_NAME,
-    ephemeral: options.ephemeral ?? true
+    ephemeral: options.ephemeral ?? true,
+    ...(options.developerInstructions ? { developerInstructions: options.developerInstructions } : {})
   };
 }
 
@@ -74,7 +75,8 @@ function buildResumeParams(threadId, cwd, options = {}) {
     cwd,
     model: options.model ?? null,
     approvalPolicy: options.approvalPolicy ?? "never",
-    sandbox: options.sandbox ?? "read-only"
+    sandbox: options.sandbox ?? "read-only",
+    ...(options.developerInstructions ? { developerInstructions: options.developerInstructions } : {})
   };
 }
 
@@ -592,7 +594,10 @@ async function captureTurn(client, threadId, startRequest, options = {}) {
       completeTurn(state, response.turn);
     }
 
-    return await state.completion;
+    return await Promise.race([
+      state.completion,
+      client.exitPromise.then(() => { throw client.exitError ?? new Error("Codex connection closed before turn completion."); })
+    ]);
   } finally {
     clearCompletionTimer(state);
     client.setNotificationHandler(previousHandler ?? null);
@@ -798,7 +803,18 @@ async function getCodexAuthStatusFromClient(client, cwd) {
   }
 }
 
+let cachedAvailability = null;
+
 export function getCodexAvailability(cwd) {
+  if (cachedAvailability && Date.now() - cachedAvailability.at < 10 * 60 * 1000) {
+    return cachedAvailability.status;
+  }
+  const status = probeCodexAvailability(cwd);
+  cachedAvailability = status.available ? { at: Date.now(), status } : null;
+  return status;
+}
+
+function probeCodexAvailability(cwd) {
   const versionStatus = binaryAvailable("codex", ["--version"], { cwd });
   if (!versionStatus.available) {
     return versionStatus;
@@ -977,7 +993,7 @@ export async function interruptAppServerTurn(cwd, { threadId, turnId }) {
 export async function runAppServerReview(cwd, options = {}) {
   const availability = getCodexAvailability(cwd);
   if (!availability.available) {
-    throw new Error("Codex CLI is not installed or is missing required runtime support. Install it with `curl -fsSL https://chatgpt.com/codex/install.sh | sh`, then rerun `/codex:setup`.");
+    throw new Error("Codex CLI is unavailable or lacks required runtime support. Install or update Codex CLI on this execution host and sign in with your ChatGPT account; see guide.md.");
   }
 
   const connectOptions = buildWatchdogConnectOptions(options.watchdog);
@@ -1032,13 +1048,14 @@ export async function runAppServerReview(cwd, options = {}) {
 }
 
 export async function runAppServerTurn(cwd, options = {}) {
-  const availability = getCodexAvailability(cwd);
+  const availability = options.client ? { available: true } : getCodexAvailability(cwd);
   if (!availability.available) {
-    throw new Error("Codex CLI is not installed or is missing required runtime support. Install it with `curl -fsSL https://chatgpt.com/codex/install.sh | sh`, then rerun `/codex:setup`.");
+    throw new Error("Codex CLI is unavailable or lacks required runtime support. Install or update Codex CLI on this execution host and sign in with your ChatGPT account; see guide.md.");
   }
 
-  const connectOptions = buildWatchdogConnectOptions(options.watchdog);
-  return withAppServer(cwd, async (client) => {
+  const connectOptions = { ...options.connectOptions, ...buildWatchdogConnectOptions(options.watchdog) };
+  const run = options.client ? (fn) => fn(options.client) : (fn) => withAppServer(cwd, fn, connectOptions);
+  return run(async (client) => {
     let threadId;
 
     if (options.resumeThreadId) {
@@ -1046,18 +1063,22 @@ export async function runAppServerTurn(cwd, options = {}) {
       const response = await resumeThread(client, options.resumeThreadId, cwd, {
         model: options.model,
         sandbox: options.sandbox,
-        ephemeral: false
+        ephemeral: false,
+        developerInstructions: options.developerInstructions
       });
       threadId = response.thread.id;
+      options.onSession?.({ threadId, model: response.model ?? null });
     } else {
       emitProgress(options.onProgress, "Starting Codex task thread.", "starting");
       const response = await startThread(client, cwd, {
         model: options.model,
         sandbox: options.sandbox,
         ephemeral: options.persistThread ? false : true,
-        threadName: options.persistThread ? options.threadName : options.threadName ?? null
+        threadName: options.persistThread ? options.threadName : options.threadName ?? null,
+        developerInstructions: options.developerInstructions
       });
       threadId = response.thread.id;
+      options.onSession?.({ threadId, model: response.model ?? null });
     }
 
     emitProgress(options.onProgress, `Thread ready (${threadId}).`, "starting", {
@@ -1078,7 +1099,8 @@ export async function runAppServerTurn(cwd, options = {}) {
           input: buildTurnInput(prompt),
           model: options.model ?? null,
           effort: options.effort ?? null,
-          outputSchema: options.outputSchema ?? null
+          outputSchema: options.outputSchema ?? null,
+          ...(options.sandboxPolicy ? { sandboxPolicy: options.sandboxPolicy } : {})
         }),
       { onProgress: options.onProgress }
     );
@@ -1096,13 +1118,13 @@ export async function runAppServerTurn(cwd, options = {}) {
       touchedFiles: collectTouchedFiles(turnState.fileChanges),
       commandExecutions: turnState.commandExecutions
     };
-  }, connectOptions);
+  });
 }
 
 export async function findLatestTaskThread(cwd, options = {}) {
   const availability = getCodexAvailability(cwd);
   if (!availability.available) {
-    throw new Error("Codex CLI is not installed or is missing required runtime support. Install it with `curl -fsSL https://chatgpt.com/codex/install.sh | sh`, then rerun `/codex:setup`.");
+    throw new Error("Codex CLI is unavailable or lacks required runtime support. Install or update Codex CLI on this execution host and sign in with your ChatGPT account; see guide.md.");
   }
 
   return withAppServer(cwd, async (client) => {

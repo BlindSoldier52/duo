@@ -1,32 +1,58 @@
 import { spawnSync } from "node:child_process";
 import process from "node:process";
+import fs from "node:fs";
+import path from "node:path";
 
-function resolveWindowsShell() {
-  const shell = process.env.SHELL;
-  // Only honor SHELL if it looks like a native Windows path (e.g. C:\Program Files\Git\bin\bash.exe).
-  // Git Bash / MSYS often set SHELL to a POSIX path like /usr/bin/bash, which spawnSync cannot resolve.
-  if (shell && /^[A-Za-z]:[\\/]/.test(shell)) {
-    return shell;
-  }
-  return true;
+export function resolveExecutable(command, args = [], env = process.env) {
+	if (command === "node") return [process.execPath, args];
+	if (process.platform !== "win32") return [command, args];
+	if (command === "npm" || command === "npx") {
+		const script = path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", `${command}-cli.js`);
+		if (fs.existsSync(script)) return [process.execPath, [script, ...args]];
+	}
+	if (path.isAbsolute(command)) {
+		if (/\.(cmd|bat)$/i.test(command)) throw new Error("Use a native executable or node script instead of a batch file.");
+		return [command, args];
+	}
+	const searchPath = env.PATH ?? env.Path ?? Object.entries(env).find(([key]) => key.toLowerCase() === "path")?.[1] ?? "";
+	for (const entry of searchPath.split(path.delimiter)) {
+		const directory = entry.replace(/^"|"$/g, "");
+		if (!directory) continue;
+		for (const extension of [".exe", ".com"]) {
+			const candidate = path.join(directory, `${command}${extension}`);
+			if (fs.existsSync(candidate)) return [candidate, args];
+		}
+		const shim = command === "codex" ? ["@openai", "codex", "bin", "codex.js"] : command === "claude" ? ["@anthropic-ai", "claude-code", "cli.js"] : null;
+		if (shim) {
+			const script = path.join(directory, "node_modules", ...shim);
+			if (fs.existsSync(script)) return [process.execPath, [script, ...args]];
+		}
+		if ([".cmd", ".bat"].some((extension) => fs.existsSync(path.join(directory, `${command}${extension}`)))) {
+			throw new Error(`Cannot safely launch the ${command} batch wrapper. Use its native executable or Node.js entry point.`);
+		}
+	}
+	return [command, args];
 }
 
 export function runCommand(command, args = [], options = {}) {
-  const result = spawnSync(command, args, {
+  if (options.shell) throw new Error("Implicit shell execution is not supported. Invoke an explicit executable with separate arguments.");
+  const [target, targetArgs] = resolveExecutable(command, args, options.env ?? process.env);
+  const result = spawnSync(target, targetArgs, {
     cwd: options.cwd,
     env: options.env,
     encoding: "utf8",
     input: options.input,
     maxBuffer: options.maxBuffer,
     stdio: options.stdio ?? "pipe",
-    shell: options.shell ?? (process.platform === "win32" ? resolveWindowsShell() : false),
+    timeout: options.timeout ?? 5 * 60 * 1000,
+    shell: false,
     windowsHide: true
   });
 
   return {
     command,
     args,
-    status: result.status ?? 0,
+    status: result.status ?? (result.error || result.signal ? 1 : 0),
     signal: result.signal ?? null,
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? "",
@@ -60,6 +86,26 @@ export function binaryAvailable(command, versionArgs = ["--version"], options = 
   return { available: true, detail: result.stdout.trim() || result.stderr.trim() || "ok" };
 }
 
+export function processMatches(pid, pattern) {
+  if (!isPidAlive(pid)) {
+    return false;
+  }
+  if (process.platform === "linux") {
+    try {
+      return pattern.test(fs.readFileSync(`/proc/${pid}/cmdline`, "utf8"));
+    } catch {
+      return true;
+    }
+  }
+  const result = process.platform === "win32"
+    ? runCommand("tasklist", ["/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"], { timeout: 10000 })
+    : runCommand("ps", ["-p", String(pid), "-o", "comm="], { timeout: 10000 });
+  if (result.error || result.status !== 0) {
+    return true;
+  }
+  return pattern.test(result.stdout);
+}
+
 export function isPidAlive(pid) {
   if (!Number.isFinite(pid) || pid <= 0) {
     return false;
@@ -88,7 +134,8 @@ export function terminateProcessTree(pid, options = {}) {
   if (platform === "win32") {
     const result = runCommandImpl("taskkill", ["/PID", String(pid), "/T", "/F"], {
       cwd: options.cwd,
-      env: options.env
+      env: options.env,
+      shell: false
     });
 
     if (!result.error && result.status === 0) {

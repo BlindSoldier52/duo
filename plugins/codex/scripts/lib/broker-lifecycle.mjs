@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { createBrokerEndpoint, parseBrokerEndpoint } from "./broker-endpoint.mjs";
 import { writeFileAtomic } from "./fs.mjs";
 import { acquirePidLockAsync } from "./lockfile.mjs";
-import { terminateProcessTree } from "./process.mjs";
+import { processMatches, terminateProcessTree } from "./process.mjs";
 import { resolveStateDir } from "./state.mjs";
 
 const BROKER_STATE_FILE = "broker.json";
@@ -73,6 +73,7 @@ export function spawnBrokerProcess({ scriptPath, cwd, endpoint, pidFile, logFile
     cwd,
     env,
     detached: true,
+    windowsHide: true,
     stdio: ["ignore", logFd, logFd]
   });
   child.unref();
@@ -110,12 +111,18 @@ export function clearBrokerSession(cwd) {
   }
 }
 
-async function isBrokerEndpointReady(endpoint) {
+function terminateBrokerProcess(pid) {
+  if (processMatches(pid, /node/i)) {
+    terminateProcessTree(pid);
+  }
+}
+
+async function isBrokerEndpointReady(endpoint, timeoutMs = 150) {
   if (!endpoint) {
     return false;
   }
   try {
-    return await waitForBrokerEndpoint(endpoint, 150);
+    return await waitForBrokerEndpoint(endpoint, timeoutMs);
   } catch {
     return false;
   }
@@ -146,7 +153,7 @@ export async function ensureBrokerSession(cwd, options = {}) {
   try {
     // Recheck under the lock — another session may have just spawned a broker.
     const current = loadBrokerSession(cwd);
-    if (current && (await isBrokerEndpointReady(current.endpoint))) {
+    if (current && (await isBrokerEndpointReady(current.endpoint, 1000))) {
       return current;
     }
 
@@ -157,7 +164,7 @@ export async function ensureBrokerSession(cwd, options = {}) {
         logFile: current.logFile ?? null,
         sessionDir: current.sessionDir ?? null,
         pid: current.pid ?? null,
-        killProcess: options.killProcess ?? terminateProcessTree
+        killProcess: options.killProcess ?? terminateBrokerProcess
       });
       clearBrokerSession(cwd);
     }
@@ -188,7 +195,7 @@ export async function ensureBrokerSession(cwd, options = {}) {
         logFile,
         sessionDir,
         pid: child.pid ?? null,
-        killProcess: options.killProcess ?? terminateProcessTree
+        killProcess: options.killProcess ?? terminateBrokerProcess
       });
       return null;
     }

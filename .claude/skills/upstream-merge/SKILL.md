@@ -14,7 +14,7 @@ This fork has a large structural divergence — removed slash commands (cancel, 
 ## What we keep vs. adopt
 
 **Always keep ours (reject upstream changes to these):**
-- Package identity: name is `codex-plugin-cc` (not `@openai/codex-plugin-cc`), our version number, our description/author fields.
+- Package identity: name is `duo` (not `@openai/codex-plugin-cc` or `codex-plugin-cc`), our version number, our description/author fields.
 - Marketplace schema: `.claude-plugin/marketplace.json` has no `metadata.version` or `plugins[].version` — those were simplified out. The `scripts/bump-version.mjs` TARGETS array should match (no marketplace entry).
 - README: ours is intentionally different. Always keep our side.
 - Deleted files: `plugins/codex/agents/codex-rescue.md`, `plugins/codex/commands/cancel.md`, `plugins/codex/commands/result.md`, `plugins/codex/commands/status.md`, `plugins/codex/scripts/stop-review-gate-hook.mjs`. If upstream modifies these, `git rm` them during conflict resolution.

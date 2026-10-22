@@ -13,7 +13,7 @@ import {
   teardownBrokerSession
 } from "../plugins/codex/scripts/lib/broker-lifecycle.mjs";
 import { parseBrokerEndpoint } from "../plugins/codex/scripts/lib/broker-endpoint.mjs";
-import { terminateProcessTree } from "../plugins/codex/scripts/lib/process.mjs";
+import { processMatches, terminateProcessTree } from "../plugins/codex/scripts/lib/process.mjs";
 
 const trackedDirs = new Set();
 
@@ -27,7 +27,23 @@ export function writeExecutable(filePath, source) {
   fs.writeFileSync(filePath, source, { encoding: "utf8", mode: 0o755 });
 }
 
+export function symlinkOrSkip(t, target, file) {
+  try {
+    fs.symlinkSync(target, file);
+    return true;
+  } catch (error) {
+    if (error?.code !== "EPERM") {
+      throw error;
+    }
+    t.skip("Creating symlinks needs administrator rights or Windows Developer Mode.");
+    return false;
+  }
+}
+
 export function run(command, args, options = {}) {
+  if (command === "node") {
+    command = process.execPath;
+  }
   return spawnSync(command, args, {
     cwd: options.cwd,
     env: options.env,
@@ -251,7 +267,8 @@ export async function cleanupTrackedBrokers() {
       continue;
     }
 
-    const brokerPid = session.pid ?? null;
+    const recordedPid = session.pid ?? null;
+    const brokerPid = Number.isFinite(recordedPid) && processMatches(recordedPid, /node/i) ? recordedPid : null;
     // discoverDescendants returns null if the platform has no supported backend.
     // In that case we skip descendant assertions — the group/tree kill still
     // targets everything — and only verify the broker pid itself.

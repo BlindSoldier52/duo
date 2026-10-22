@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { makeTempDir } from "./helpers.mjs";
 import {
@@ -127,7 +127,7 @@ test("concurrent upsertJob writers lose no updates", async (t) => {
 
   const children = [];
   for (let i = 0; i < jobCount; i += 1) {
-    const script = `import(${JSON.stringify(STATE_MODULE)}).then((state) => {
+    const script = `import(${JSON.stringify(pathToFileURL(STATE_MODULE).href)}).then((state) => {
       state.upsertJob(${JSON.stringify(workspace)}, { id: "job-${i}", status: "running" });
     });`;
     children.push(
@@ -199,7 +199,7 @@ test("contended stale-lock stealing preserves mutual exclusion", async (t) => {
 
   const children = [];
   for (let i = 0; i < writerCount; i += 1) {
-    const script = `import(${JSON.stringify(STATE_MODULE)}).then((state) => {
+    const script = `import(${JSON.stringify(pathToFileURL(STATE_MODULE).href)}).then((state) => {
       state.updateState(${JSON.stringify(workspace)}, (s) => {
         s.config.counter = (s.config.counter ?? 0) + 1;
       });

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="color-scheme" content="light">
+	<title>Duo — Codex × Claude</title>
+	<link rel="stylesheet" href="/styles.css">
+	<script type="module" src="/app.js"></script>
+</head>
+<body>
+	<a class="skip-link" href="#conversation">Skip to conversation</a>
+	<aside class="sidebar">
+		<a class="brand" href="/" aria-label="Duo home"><span class="brand-icon">d.</span><span>Duo<span class="brand-caption">CODEX × CLAUDE</span></span></a>
+		<button id="new-run" class="primary wide" disabled><span aria-hidden="true">＋</span> New conversation</button>
+		<div class="section-label">YOUR WORKSPACE</div>
+		<nav id="runs" aria-label="Conversations"><p class="muted">Connecting…</p></nav>
+		<div class="sidebar-bottom"><span class="connection-dot" id="connection-dot"></span><span id="connection-label">Local backend</span><p id="workspace" class="workspace"></p></div>
+	</aside>
+	<main>
+		<header class="topbar"><div><span class="eyebrow">TWO PERSPECTIVES. ONE PROJECT.</span><h1 id="run-title">Room for good ideas.</h1></div><span class="pill" id="phase">Getting ready</span></header>
+		<div id="notice" role="status" aria-live="polite"></div>
+		<div id="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+		<section class="agents" aria-label="Participants">
+			<div class="agent-card"><span class="avatar codex" aria-hidden="true">C</span><div><strong>Codex</strong><span id="codex-model">CLI-configured model</span></div><span class="agent-state" id="codex-state">Checking…</span></div>
+			<span class="agent-link" aria-hidden="true">⇄</span>
+			<div class="agent-card"><span class="avatar claude" aria-hidden="true">✳</span><div><strong>Claude</strong><span id="claude-model">Adaptive selection</span></div><span class="agent-state" id="claude-state">Checking…</span></div>
+		</section>
+		<div class="workbench">
+			<section class="conversation" id="conversation" tabindex="-1" aria-label="Shared chat">
+				<div class="panel-heading"><h2>Conversation</h2><span id="mode-label" class="muted">You lead. They collaborate.</span></div>
+				<div id="messages" class="messages" role="log" aria-label="Messages">
+					<div class="empty"><div class="empty-mark" aria-hidden="true">↗</div><span class="eyebrow">FROM QUESTION TO RESULT</span><h2>A place at the same table.</h2><p>Describe what you want to build. Codex and Claude compare ideas while you follow and control the whole process.</p><button id="empty-start" class="primary" disabled>Start a task <span aria-hidden="true">→</span></button><div class="mode-preview"><span>01 &nbsp; Discussion</span><span>02 &nbsp; Plan</span><span>03 &nbsp; Verified work</span></div></div>
+				</div>
+				<form id="message-form" class="composer">
+					<label class="sr-only" for="message">Your message</label><textarea id="message" rows="2" placeholder="Ask a question, or tick the box to change the task. Ctrl+Enter sends." required disabled></textarea>
+					<div class="composer-footer"><label>Recipient <select id="recipient"><option value="both">Both agents</option><option value="codex">Codex only</option><option value="claude">Claude only</option></select></label><label class="change"><input type="checkbox" id="change" disabled> This changes the task</label><button id="send" class="primary" disabled>Send <span aria-hidden="true">↑</span></button></div>
+				</form>
+			</section>
+			<aside class="inspector" aria-label="Plan and execution">
+				<div class="tabs" role="tablist" aria-label="Task details"><button role="tab" aria-selected="true" aria-controls="plan-panel" id="plan-tab" data-tab="plan">Plan</button><button role="tab" aria-selected="false" aria-controls="changes-panel" id="changes-tab" data-tab="changes" tabindex="-1">Changes</button><button role="tab" aria-selected="false" aria-controls="checks-panel" id="checks-tab" data-tab="checks" tabindex="-1">Tests</button></div>
+				<section id="plan-panel" role="tabpanel" aria-labelledby="plan-tab" class="tab-panel"><div class="section-label">SHARED PLAN</div><p id="plan-hint" class="muted">The plan appears here after the agents discuss your task.</p><label class="sr-only" for="plan">Editable plan</label><textarea id="plan" placeholder="No plan yet." disabled></textarea><div id="votes" class="votes"></div><div class="plan-actions"><button id="revise" disabled>Save and review</button><button id="approve" class="primary" disabled>Approve plan</button><button id="reject" class="quiet danger" disabled>Reject</button></div></section>
+				<section id="changes-panel" role="tabpanel" aria-labelledby="changes-tab" class="tab-panel" hidden><button id="refresh-diff" class="quiet">Refresh</button><pre id="diff" aria-label="Project changes" tabindex="0">Select a task to see the project changes.</pre></section>
+				<section id="checks-panel" role="tabpanel" aria-labelledby="checks-tab" class="tab-panel" hidden><div class="section-label">RECORDED CHECKS</div><div id="checks"><p class="muted">No checks have run.</p></div><div id="final-votes" class="votes"></div></section>
+				<div class="run-control"><div class="section-label">EXECUTION CONTROLS</div><div class="control-buttons"><button id="pause" disabled>Pause</button><button id="resume" disabled>Resume</button><button id="cancel" class="danger" disabled>Cancel</button></div><p id="operation" class="muted">No active task.</p><label class="muted" for="run-mode">Task mode</label><select id="run-mode" disabled><option value="medium">Medium</option><option value="skip-everything">Skip everything</option><option value="split">VPS–computer</option></select><button id="change-mode" class="quiet" disabled>Apply mode</button>
+					<label class="muted" for="run-language">Response language</label><input id="run-language" list="response-languages" maxlength="80" placeholder="English" disabled><button id="apply-language" class="quiet" disabled>Apply language</button>
+				</div>
+				<details class="activity"><summary>Technical activity</summary><pre id="activity" aria-label="Technical activity" tabindex="0">Waiting.</pre></details>
+			</aside>
+		</div>
+	</main>
+	<datalist id="response-languages"><option value="English"><option value="Romanian"><option value="German"><option value="French"><option value="Spanish"><option value="Italian"><option value="Portuguese"><option value="Japanese"><option value="Chinese"><option value="Arabic"></datalist>
+	<dialog id="create-dialog" aria-labelledby="create-title">
+		<form id="create-form">
+			<div class="dialog-heading">
+				<div><span class="eyebrow">A NEW COLLABORATION</span><h2 id="create-title">What are we building together?</h2></div>
+				<button type="button" id="close-dialog" class="quiet" aria-label="Close">✕</button>
+			</div>
+			<label for="task">Your task</label>
+			<textarea id="task" rows="3" required placeholder="Describe the result you want…" maxlength="64000"></textarea>
+			<label for="criteria">How do we know it is done?</label>
+			<textarea id="criteria" rows="2" placeholder="Requirements and acceptance criteria"></textarea>
+			<label for="language-input">Response language</label><input id="language-input" list="response-languages" value="English" maxlength="80" placeholder="English">
+			<p class="muted">Choose or type any language name or code. An explicit language request in your messages can override this preference.</p>
+			<div class="form-grid">
+				<label>Mode
+					<select id="mode">
+						<option value="medium">Medium — approve the plan first</option>
+						<option value="skip-everything">Skip everything — autonomous execution</option>
+						<option value="split">VPS–computer</option>
+					</select>
+				</label>
+				<label>Implementation owner<select id="implementer"><option value="codex">Codex</option><option value="claude">Claude</option></select></label>
+			</div>
+			<details>
+				<summary>Models and checks</summary>
+				<label class="checkbox"><input type="checkbox" id="windows" checked> Show agent windows. Codex and Claude each open a terminal window so you can watch them work.</label>
+				<label>Reasoning effort<select id="effort"><option value="">CLI default</option><option value="low">Low — fastest answers</option><option value="medium">Medium</option><option value="high">High — slowest, most thorough</option></select></label>
+				<label>Model selection<select id="model-policy"><option value="adaptive">Adaptive — agents choose their models</option><option value="fixed">Fixed — keep the initial models</option></select></label>
+				<div class="form-grid">
+					<label>Initial Codex model<input id="codex-input" placeholder="CLI default"></label>
+					<label>Initial Claude model<input id="claude-input" placeholder="CLI default"></label>
+				</div>
+				<p class="muted">In adaptive mode, each agent can change its own model and request additional passes within subscription limits, without gaining permissions.</p>
+				<label>Verification commands, one per line<textarea id="commands" rows="2" placeholder="npm test&#10;npm run build"></textarea></label>
+				<p class="muted">Run locally without an implicit shell. Enter only the checks you want for this project.</p>
+				<div class="form-grid"><label>Round limit<input id="max-rounds" type="number" min="1" max="30" value="12"></label><label>Passes per agent and phase<input id="max-passes" type="number" min="1" max="30" value="12"></label></div>
+			</details>
+			<fieldset id="remote-fields" hidden>
+				<legend>VPS</legend>
+				<div class="form-grid">
+					<label>Remote agent<select id="remote-agent"><option value="claude">Claude on VPS</option><option value="codex">Codex on VPS</option></select></label>
+					<label>Autonomy<select id="policy"><option value="medium">Medium</option><option value="skip-everything">Skip everything</option></select></label>
+				</div>
+				<label>SSH alias<input id="remote-alias" placeholder="vps-dev"></label>
+				<label>Remote project<input id="remote-cwd" placeholder="/home/user/project"></label>
+				<label>Worker script installed on VPS<input id="remote-worker" placeholder="/home/user/duo/plugins/codex/scripts/remote-worker.mjs"></label>
+				<label>VPS verification commands, one per line<textarea id="remote-commands" rows="2" placeholder="npm test"></textarea></label>
+			</fieldset>
+			<button class="primary wide" type="submit" id="create-submit">Start conversation <span aria-hidden="true">→</span></button>
+			<p class="muted">Agents use your signed-in CLI accounts. Their responses are not simulated.</p>
+		</form>
+	</dialog>
+</body>
+</html>

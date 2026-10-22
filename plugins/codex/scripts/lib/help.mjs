@@ -7,6 +7,17 @@ CODEX_COMPANION_STALL_WARN_MS / CODEX_COMPANION_STALL_REPEAT_MS (0 disables).
 
 codex-companion subcommands:
 
+  web [--cwd <path>] [--port <port>]
+    Open the local Duo dashboard for Codex × Claude collaboration.
+
+  collaborate start [--mode <medium|skip-everything>] [prompt]
+  collaborate status [run-id]
+  collaborate transcript <run-id>
+  collaborate language <run-id> --language <name-or-code>
+  collaborate approve <run-id> --revision <plan-hash>
+  collaborate resume|pause|cancel|reject <run-id>
+    Persistent two-agent collaboration. The dashboard exposes the full controls.
+
   review [--base <ref>] [--scope <auto|working-tree|branch>] [--model <model>] [--json]
          [--include-reasoning]
     Comprehensive code review via Codex's built-in reviewer. Slower, thorough.
@@ -46,6 +57,23 @@ codex-companion subcommands:
 
 export function getCommandHelp(command) {
   const commands = {
+    web: `codex-companion web [--cwd <path>] [--port <port>]
+
+Start a loopback-only dashboard. Open the private sign-in link printed by the server.
+The dashboard uses installed Codex and Claude Code CLIs and their subscription logins.
+No API key or frontend build is required. Keep the terminal open while using it.`,
+    collaborate: `codex-companion collaborate start [--mode <medium|skip-everything>] [prompt]
+codex-companion collaborate status [run-id]
+codex-companion collaborate transcript <run-id>
+codex-companion collaborate language <run-id> --language <name-or-code>
+codex-companion collaborate approve <run-id> --revision <plan-hash>
+codex-companion collaborate resume|pause|cancel|reject <run-id>
+
+Use --cwd, --codex-model, --claude-model, --model-policy adaptive|fixed,
+--max-rounds, --max-passes and --language to configure a run.
+Models are adaptive and response language is English by default.
+Use the web dashboard for plan editing, verification commands and VPS configuration.
+Only one coordinator may own a workspace at a time.`,
     review: `codex-companion review [options]
 
 Comprehensive code review via Codex's built-in reviewer. Slower, thorough.

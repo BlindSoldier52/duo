@@ -1,17 +1,22 @@
 {
-  "name": "codex-plugin-cc",
+  "name": "duo",
   "version": "1.0.25",
   "private": true,
   "type": "module",
-  "description": "Use Codex from Claude Code for code reviews, plan reviews, and task delegation.",
+  "bin": {
+    "duo": "duo.mjs"
+  },
+  "description": "A private web workspace for Codex and Claude collaboration, planning, implementation, and independent review.",
   "license": "Apache-2.0",
   "engines": {
-    "node": ">=18.18.0"
+    "node": ">=22.4.0"
   },
   "scripts": {
+    "web": "node duo.mjs web",
+    "install-duo": "node scripts/install-duo.mjs",
     "bump-version": "node scripts/bump-version.mjs",
     "check-version": "node scripts/bump-version.mjs --check",
-    "prebuild": "mkdir -p plugins/codex/.generated/app-server-types && codex app-server generate-ts --out plugins/codex/.generated/app-server-types",
+    "prebuild": "node scripts/generate-app-server-types.mjs",
     "build": "tsc -p tsconfig.app-server.json",
     "test": "node --test tests/*.test.mjs"
   },

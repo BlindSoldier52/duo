@@ -89,8 +89,9 @@ export function loadState(cwd) {
     return defaultState();
   }
 
+  const text = fs.readFileSync(stateFile, "utf8");
   try {
-    const parsed = JSON.parse(fs.readFileSync(stateFile, "utf8"));
+    const parsed = JSON.parse(text);
     return {
       ...defaultState(),
       ...parsed,
@@ -101,6 +102,9 @@ export function loadState(cwd) {
       jobs: Array.isArray(parsed.jobs) ? parsed.jobs : []
     };
   } catch {
+    try {
+      fs.renameSync(stateFile, `${stateFile}.corrupt-${Date.now()}`);
+    } catch {}
     return defaultState();
   }
 }

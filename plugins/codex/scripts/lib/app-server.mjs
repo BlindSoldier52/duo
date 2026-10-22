@@ -14,7 +14,7 @@ import { spawn } from "node:child_process";
 import readline from "node:readline";
 import { parseBrokerEndpoint } from "./broker-endpoint.mjs";
 import { ensureBrokerSession, loadBrokerSession } from "./broker-lifecycle.mjs";
-import { terminateProcessTree } from "./process.mjs";
+import { resolveExecutable, terminateProcessTree } from "./process.mjs";
 
 const PLUGIN_MANIFEST_URL = new URL("../../.claude-plugin/plugin.json", import.meta.url);
 const PLUGIN_MANIFEST = JSON.parse(fs.readFileSync(PLUGIN_MANIFEST_URL, "utf8"));
@@ -24,7 +24,7 @@ export const BROKER_BUSY_RPC_CODE = -32001;
 
 /** @type {ClientInfo} */
 const DEFAULT_CLIENT_INFO = {
-  title: "Codex Plugin",
+  title: "Duo",
   name: "Claude Code",
   version: PLUGIN_MANIFEST.version ?? "0.0.0"
 };
@@ -84,8 +84,8 @@ class AppServerClientBase {
    * @returns {Promise<import("./app-server-protocol").AppServerResponse<M>>}
    */
   request(method, params) {
-    if (this.closed) {
-      throw new Error("codex app-server client is closed.");
+    if (this.closed || this.exitResolved) {
+      throw this.exitError ?? new Error("codex app-server client is closed.");
     }
 
     const id = this.nextId;
@@ -200,11 +200,13 @@ class SpawnedCodexAppServerClient extends AppServerClientBase {
   }
 
   async initialize() {
-    this.proc = spawn("codex", ["app-server"], {
+    const env = this.options.env ?? process.env;
+    const [command, args] = resolveExecutable("codex", ["app-server"], env);
+    this.proc = spawn(command, args, {
       cwd: this.cwd,
-      env: this.options.env ?? process.env,
+      env,
       stdio: ["pipe", "pipe", "pipe"],
-      shell: process.platform === "win32" ? (process.env.SHELL || true) : false,
+      shell: false,
       windowsHide: true
     });
 
@@ -219,7 +221,11 @@ class SpawnedCodexAppServerClient extends AppServerClientBase {
       this.handleExit(error);
     });
 
-    this.proc.on("exit", (code, signal) => {
+    this.proc.stdin.on("error", (error) => {
+      this.handleExit(error);
+    });
+
+    const finish = (code, signal) => {
       const stderr = this.stderr.trim();
       const detail =
         code === 0
@@ -228,6 +234,10 @@ class SpawnedCodexAppServerClient extends AppServerClientBase {
               `codex app-server exited unexpectedly (${signal ? `signal ${signal}` : `exit ${code}`}).${stderr ? `\n${stderr}` : ""}`
             );
       this.handleExit(detail);
+    };
+    this.proc.on("close", finish);
+    this.proc.on("exit", (code, signal) => {
+      setTimeout(() => finish(code, signal), 1000).unref?.();
     });
 
     this.readline = readline.createInterface({ input: this.proc.stdout });
@@ -258,9 +268,6 @@ class SpawnedCodexAppServerClient extends AppServerClientBase {
       this.proc.stdin.end();
       setTimeout(() => {
         if (this.proc && !this.proc.killed && this.proc.exitCode === null) {
-          // On Windows with shell: true, the direct child is cmd.exe.
-          // Use terminateProcessTree to kill the entire tree including
-          // the grandchild node process.
           if (process.platform === "win32") {
             try {
               terminateProcessTree(this.proc.pid);
@@ -285,6 +292,63 @@ class SpawnedCodexAppServerClient extends AppServerClientBase {
       throw new Error("codex app-server stdin is not available.");
     }
     stdin.write(line);
+  }
+}
+
+export function assertWebSocketSupport() {
+  if (typeof globalThis.WebSocket !== "function") {
+    throw new Error("Agent windows require Node.js 22.4 or later; turn off Show agent windows or upgrade Node.js.");
+  }
+}
+
+export class WebSocketCodexAppServerClient extends AppServerClientBase {
+  constructor(cwd, options = {}) {
+    super(cwd, options);
+    this.transport = "websocket";
+  }
+
+  static async connect(cwd, options) {
+    const client = new WebSocketCodexAppServerClient(cwd, options);
+    await client.initialize();
+    return client;
+  }
+
+  async initialize() {
+    assertWebSocketSupport();
+    // Node's built-in (undici) WebSocket accepts a `headers` init that the DOM typings omit.
+    const init = /** @type {any} */ ({ headers: { Authorization: `Bearer ${this.options.token}` } });
+    this.socket = new WebSocket(this.options.url, init);
+    await new Promise((resolve, reject) => {
+      this.socket.addEventListener("open", resolve, { once: true });
+      this.socket.addEventListener("error", () => reject(new Error(`Could not connect to the Codex app-server at ${this.options.url}.`)), { once: true });
+    });
+    this.socket.addEventListener("message", (event) => {
+      this.handleLine(String(event.data));
+    });
+    this.socket.addEventListener("close", () => {
+      this.handleExit(this.closed ? null : createProtocolError("The Codex app-server connection closed."));
+    });
+    await this.request("initialize", {
+      clientInfo: this.options.clientInfo ?? DEFAULT_CLIENT_INFO,
+      capabilities: this.options.capabilities ?? DEFAULT_CAPABILITIES
+    });
+    this.notify("initialized", {});
+  }
+
+  async close() {
+    if (!this.closed) {
+      this.closed = true;
+      this.socket?.close();
+    }
+    await Promise.race([this.exitPromise, new Promise((resolve) => setTimeout(resolve, 2000).unref?.())]);
+    this.handleExit(null);
+  }
+
+  sendMessage(message) {
+    if (this.socket?.readyState !== WebSocket.OPEN) {
+      throw new Error("The Codex app-server connection is not open.");
+    }
+    this.socket.send(JSON.stringify(message));
   }
 }
 

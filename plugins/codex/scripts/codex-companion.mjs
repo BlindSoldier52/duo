@@ -106,7 +106,7 @@ function normalizeReasoningEffort(effort) {
   }
   if (!VALID_REASONING_EFFORTS.has(normalized)) {
     throw new Error(
-      `Unsupported reasoning effort "${effort}". Use one of: none, low, medium, high, xhigh, max, ultra.`
+      `Unsupported reasoning effort "${effort}". Use one of: none, minimal, low, medium, high, xhigh, max, ultra.`
     );
   }
   return normalized;
@@ -211,7 +211,6 @@ async function handleSetup(argv) {
 function buildAdversarialReviewPrompt(context, focusText) {
   const template = loadPromptTemplate(ROOT_DIR, "adversarial-review");
   return interpolateTemplate(template, {
-    REVIEW_KIND: "Adversarial Review",
     TARGET_LABEL: context.target.label,
     USER_FOCUS: focusText || "No extra focus provided.",
     REVIEW_COLLECTION_GUIDANCE: context.collectionGuidance,
@@ -1069,6 +1068,12 @@ async function main() {
   }
 
   switch (subcommand) {
+    case "web":
+      await (await import("./lib/collaboration-cli.mjs")).handleWeb(argv);
+      break;
+    case "collaborate":
+      await (await import("./lib/collaboration-cli.mjs")).handleCollaborate(argv);
+      break;
     case "setup":
       await handleSetup(argv);
       break;
