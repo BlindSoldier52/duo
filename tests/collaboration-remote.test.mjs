@@ -6,6 +6,34 @@ import { randomUUID } from "node:crypto";
 import { fixture } from "./collaboration-fixture.mjs";
 import { snapshot, bundle, receiveBundle, applySnapshot, git } from "../plugins/codex/scripts/lib/collaboration-git.mjs";
 import { remoteRequest } from "../plugins/codex/scripts/remote-worker.mjs";
+import { Collaboration } from "../plugins/codex/scripts/lib/collaboration.mjs";
+
+test("VPS tasks reject Git subdirectories before provider calls or snapshot creation", async (t) => {
+	const { cwd, root, manager: parent, calls } = fixture(t);
+	const selected = path.join(cwd, "selected");
+	fs.mkdirSync(selected);
+	fs.writeFileSync(path.join(selected, "inside.txt"), "Selected workspace\n");
+	const manager = new Collaboration(selected, {
+		directory: path.join(root, "selected-state"),
+		runner: { ...parent.runner, validateRemote() {} }
+	});
+	t.after(() => manager.close());
+	const before = git(cwd, ["status", "--porcelain"]);
+	const checkpoint = snapshot(cwd, "refs/duo/audit/local");
+	assert.throws(() => manager.create({ task: "Implement", mode: "split", policy: "medium" }), /requires the Git repository root/);
+	assert.throws(() => snapshot(selected, "refs/duo/audit/subdirectory"), /requires the Git repository root/);
+	assert.throws(() => bundle(selected, checkpoint), /requires the Git repository root/);
+	await assert.rejects(remoteRequest(selected, { action: "prepare", runId: randomUUID() }), /requires the Git repository root/);
+	assert.deepEqual(calls, []);
+	assert.deepEqual(manager.list(), []);
+	assert.equal(git(cwd, ["status", "--porcelain"]), before);
+	assert.equal(git(cwd, ["for-each-ref", "refs/duo/audit/subdirectory"]), "");
+	const local = manager.create({ task: "Plan locally" });
+	await manager.running.get(local.id)?.promise;
+	assert.equal(manager.get(local.id).phase, "awaiting_user");
+	assert.ok(calls.length > 0);
+	assert.ok(calls.every((call) => !call.write));
+});
 
 test("Git snapshots preserve the user's real index and transfer uncommitted files", (t) => {
 	const local = fixture(t);

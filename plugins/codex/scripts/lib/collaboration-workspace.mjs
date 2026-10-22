@@ -29,7 +29,6 @@ export function isGitWorkspace(cwd) {
 }
 
 const BUILD_DIRECTORIES = new Set(["target", "dist", "build", "out", "obj"]);
-const LARGE_FILE_BYTES = 16 * 1024 * 1024;
 
 function folderFiles(cwd, relative = "", files = []) {
 	for (const entry of fs.readdirSync(path.join(cwd, relative), { withFileTypes: true })) {
@@ -45,9 +44,10 @@ function folderFiles(cwd, relative = "", files = []) {
 const digests = new Map();
 
 function submoduleDigest(directory) {
-	const head = runCommand("git", ["rev-parse", "HEAD"], { cwd: directory });
-	const status = runCommand("git", ["status", "--porcelain", "--untracked-files=normal"], { cwd: directory });
-	return createHash("sha256").update(`submodule\0${head.stdout.trim()}\0${status.stdout}`).digest("hex");
+	const head = git(directory, ["rev-parse", "HEAD"]).trim();
+	const status = git(directory, ["status", "--porcelain", "--untracked-files=normal"]);
+	const revision = fs.existsSync(path.join(directory, ".git")) ? workspaceRevision(directory) : "";
+	return createHash("sha256").update(`submodule\0${head}\0${status}\0${revision}`).digest("hex");
 }
 
 function fileDigest(file, stat) {
@@ -58,7 +58,6 @@ function fileDigest(file, stat) {
 	const content = createHash("sha256");
 	content.update(String(stat.mode & 0o777));
 	if (stat.isSymbolicLink()) content.update(fs.readlinkSync(file));
-	else if (stat.isFile() && stat.size > LARGE_FILE_BYTES) content.update(`large file\0${stat.size}\0${stat.mtimeMs}`);
 	else if (stat.isFile()) {
 		const descriptor = fs.openSync(file, "r");
 		try {

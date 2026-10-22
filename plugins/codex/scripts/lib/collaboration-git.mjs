@@ -8,8 +8,13 @@ export function git(cwd, args, options = {}) {
 	return runCommandChecked("git", args, { cwd, shell: false, maxBuffer: 48 * 1024 * 1024, ...options }).stdout.trimEnd();
 }
 
+export function assertSnapshotWorkspace(cwd) {
+	if (git(cwd, ["rev-parse", "--show-prefix"])) throw new Error("VPS–computer synchronization requires the Git repository root. Select the repository root or use Medium or Skip everything locally for a subdirectory.");
+}
+
 export function snapshot(cwd, ref) {
 	if (!/^refs\/duo\/[a-z0-9/-]+$/.test(ref)) throw new Error("Invalid internal snapshot reference.");
+	assertSnapshotWorkspace(cwd);
 	const paths = git(cwd, ["ls-files", "-z", "--cached", "--others", "--exclude-standard"]).split("\0").filter(Boolean);
 	if (paths.some((name) => protectedPath(name) && !/(^|\/)\.env\.(?:example|sample|template)$/i.test(name))) {
 		throw new Error("A credential-like file would be included in the remote snapshot. Exclude it with .gitignore before transferring this project.");
@@ -36,6 +41,7 @@ export function snapshot(cwd, ref) {
 }
 
 export function bundle(cwd, checkpoint) {
+	assertSnapshotWorkspace(cwd);
 	const directory = createDuoTempDir("bundle-");
 	const file = path.join(directory, "snapshot.bundle");
 	try {

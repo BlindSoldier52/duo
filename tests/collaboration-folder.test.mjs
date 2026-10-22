@@ -79,7 +79,7 @@ test("folder scanning excludes credential paths and dependency directories witho
 	assert.throws(() => projectFile(cwd, ".npmrc/synthetic.txt"), /Credential files/);
 });
 
-test("folder scanning skips build output and fingerprints large files without reading them", (t) => {
+test("folder scanning skips build output and detects large-file content changes with preserved metadata", (t) => {
 	const { cwd } = fixture(t, null, { git: false });
 	const before = workspaceRevision(cwd);
 	for (const name of ["target", "dist", "build", "out", "obj"]) {
@@ -89,10 +89,18 @@ test("folder scanning skips build output and fingerprints large files without re
 	assert.equal(workspaceRevision(cwd), before);
 	const large = path.join(cwd, "sounds.pak");
 	fs.writeFileSync(large, Buffer.alloc(17 * 1024 * 1024, 1));
+	const time = new Date("2026-01-01T00:00:00Z");
+	fs.utimesSync(large, time, time);
 	const withLarge = workspaceRevision(cwd);
 	assert.notEqual(withLarge, before);
+	const descriptor = fs.openSync(large, "r+");
+	try { fs.writeSync(descriptor, Buffer.from([2]), 0, 1, 0); }
+	finally { fs.closeSync(descriptor); }
+	fs.utimesSync(large, time, time);
+	const changed = workspaceRevision(cwd);
+	assert.notEqual(changed, withLarge);
 	fs.appendFileSync(large, "more");
-	assert.notEqual(workspaceRevision(cwd), withLarge);
+	assert.notEqual(workspaceRevision(cwd), changed);
 });
 
 test("folder fingerprints do not traverse directory symlinks or read their target contents", (t) => {

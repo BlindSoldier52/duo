@@ -90,7 +90,7 @@ In a plain folder, file-content fingerprints bind approvals and final votes to t
 
 Known credential paths (including `.env*`, `.npmrc`, private-key extensions, and credential directories) are excluded before reading. This filename filter cannot identify arbitrary secrets: the no-read policy and host isolation still apply. Excluded files are not covered by revision checks. Use a task-specific, nonsecret folder.
 
-VPS–computer synchronization still requires a Git project with an existing commit; a plain-folder split task is rejected before provider calls. Git repositories without commits support local tasks only.
+VPS–computer synchronization requires the Git repository root with an existing commit on both hosts. A plain folder, a repository without commits, or a Git subdirectory is rejected before local provider calls or snapshot creation. Medium and Skip everything remain available locally from subdirectories. Bundles include repository history, so selecting a subdirectory cannot limit their scope.
 
 If Duo is already running for that workspace, a second web or standalone coordinator exits immediately with `Duo is already running for this workspace` and a nonzero exit status. It does not stop the original instance, take over its lock, or start on another port. Use the original instance or stop it first. Locks left by an exited process are recovered automatically; never delete the lock of a running coordinator.
 
@@ -161,7 +161,7 @@ ssh my-vps 'mkdir -p /home/<user>/tools/duo/plugins'
 scp -r plugins/codex my-vps:/home/<user>/tools/duo/plugins/
 ```
 
-Those commands are manual setup examples, not a claim that deployment has already been completed. Choose an actual Git project directory on the VPS; do not use a production checkout or a directory containing credentials. In **New conversation**, select **VPS–computer** and fill in:
+Those commands are manual setup examples, not a claim that deployment has already been completed. Choose an actual Git repository root on the VPS; do not use a production checkout or a directory containing credentials. The local workspace must also be a repository root. In **New conversation**, select **VPS–computer** and fill in:
 
 | Field | Value |
 | --- | --- |
@@ -209,7 +209,7 @@ node --test tests/process.test.mjs tests/duo.test.mjs tests/duo-install.test.mjs
 npm run build
 ```
 
-These are the focused Duo tests, not a claim that the full legacy suite passes on Windows. Live account tests are opt-in and consume subscription allowance. See [verification evidence and outstanding limits](docs/verification.md).
+Run `npm test` for the full suite. Live account tests are opt-in and consume subscription allowance. See [verification evidence and outstanding limits](docs/verification.md) for the latest recorded results and platform-specific skips.
 
 - [Complete collaboration guide](docs/collaboration.md)
 - [Safety requirements and enforcement limits](docs/safety.md)

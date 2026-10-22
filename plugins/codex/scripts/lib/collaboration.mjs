@@ -7,6 +7,7 @@ import { AGENTS, digest, fault, redact, validateLanguage, validateModel, validat
 import { isGitWorkspace, workspaceRevision, workspaceSnapshot, workspaceDiff } from "./collaboration-workspace.mjs";
 import { assertLaunchable, runCheck } from "./collaboration-process.mjs";
 import { runCommand } from "./process.mjs";
+import { assertSnapshotWorkspace } from "./collaboration-git.mjs";
 
 const TERMINAL = new Set(["completed", "rejected", "cancelled"]);
 const ACTIVE = new Set(["discussing", "implementing", "reviewing", "verifying", "queued"]);
@@ -156,6 +157,7 @@ export class Collaboration extends EventEmitter {
 		const head = runCommand("git", ["rev-parse", "--verify", "HEAD"], { cwd: this.cwd });
 		if (head.error) throw head.error;
 		if (head.status !== 0) throw fault("VPS–computer synchronization requires a Git repository with an existing commit. Local tasks do not require a commit.");
+		assertSnapshotWorkspace(this.cwd);
 	}
 
 	action(id, name, input = {}) {

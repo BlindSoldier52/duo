@@ -22,7 +22,7 @@ Read [guide.md](guide.md) for step-by-step setup, your first task, workflow mode
 
 - **Medium:** review and approve the shared plan before implementation.
 - **Skip everything:** let the agents implement, verify, and review within the task's authorized scope.
-- **VPS–computer:** run one agent on a configured Linux VPS over SSH.
+- **VPS–computer:** run one agent on a configured Linux VPS over SSH. Select a Git repository root with an existing commit on both hosts.
 
 The interface and default agent response language are English. Each conversation has a configurable response language. Both agents can select their own models and request additional bounded passes without gaining permissions.
 

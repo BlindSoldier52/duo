@@ -7,7 +7,7 @@ import { resolveStateDir } from "./lib/state.mjs";
 import { writeJsonFile } from "./lib/fs.mjs";
 import { acquirePidLockSync } from "./lib/lockfile.mjs";
 import { workspaceRevision } from "./lib/collaboration-workspace.mjs";
-import { git, snapshot, bundle, receiveBundle } from "./lib/collaboration-git.mjs";
+import { git, snapshot, bundle, receiveBundle, assertSnapshotWorkspace } from "./lib/collaboration-git.mjs";
 import { digest, redact } from "./lib/collaboration-protocol.mjs";
 import { runCheck } from "./lib/collaboration-process.mjs";
 import { isPidAlive } from "./lib/process.mjs";
@@ -28,6 +28,7 @@ function ownedWorkspace(cwd, runId) {
 }
 
 export async function remoteRequest(cwd, input) {
+	assertSnapshotWorkspace(cwd);
 	const directory = storage(cwd);
 	if (input.action === "prepare") {
 		identifier(input.runId);

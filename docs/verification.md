@@ -1,8 +1,25 @@
 # Collaboration verification
 
-Verified on Windows with Node.js 24.16.0, Codex CLI 0.163.0, and Claude Code 2.1.306 on October 21, 2026.
+## Current release checks — October 22, 2026
 
-## Automated checks
+Checked on Windows with Node.js 24.16.0. The release-readiness fixes were verified with synthetic local fixtures, without provider inference or SSH access.
+
+- `npm test`: 153 tests, 149 passed, 4 skipped, 0 failed. The skips were the two opt-in live workflows, a symlink test requiring additional Windows permissions, and a wildcard-filename test unsupported on Windows.
+- The three targeted regression tests failed before the fixes and passed afterwards: edits to files larger than 16 MB with preserved size and modification time, further edits inside an already modified Git submodule, and refusal to synchronize a Git subdirectory.
+- VPS subdirectory rejection is checked at task creation, snapshot/bundle creation, and worker preparation; local Medium planning from a subdirectory remains covered.
+- `npm run build`, `npm run check-version`, and `git diff --check` passed. Version metadata remains at 1.0.25.
+- CI now runs for pull requests, pushes to `main`, and manual dispatch on Windows and Linux with Node.js 22.4.0 and 24. The configured matrix is not evidence that those remote jobs have passed.
+- The Browser integration returned no available browsers. No new visual or interactive browser QA was completed in this session.
+
+The full suite emitted Node's `DEP0190` warning from legacy test subprocess handling. It did not fail the suite; the dedicated production-process checks with deprecations treated as errors also passed. No warnings were suppressed.
+
+Large included regular files now use content hashes read in bounded chunks. Initialized submodules contribute recursive content fingerprints. VPS synchronization requires repository roots on both hosts because Git bundles include repository history. Existing running coordinators and separately deployed workers must be updated and restarted to use these fixes.
+
+## Historical verification — October 21, 2026
+
+The entries below describe earlier revisions and are retained as historical evidence. Their test counts, CLI versions, live runs, and browser results do not describe a new run of the current checkout. The earlier environment used Windows, Node.js 24.16.0, Codex CLI 0.163.0, and Claude Code 2.1.306.
+
+### Automated checks
 
 - 78 tests passed across `process.test.mjs`, `duo.test.mjs`, `duo-install.test.mjs`, `collaboration-folder.test.mjs`, `collaboration-lock.test.mjs`, `collaboration-language.test.mjs`, `collaboration-models.test.mjs`, `collaboration-policy.test.mjs`, `collaboration.test.mjs`, `collaboration-remote.test.mjs`, and `web.test.mjs` after the plain-folder and AppData installation updates, without DEP0190 warnings in this focused run.
 - `npm run build` passed, including App Server type generation through the portable prebuild script.
@@ -30,7 +47,7 @@ Ten folder tests cover Medium and Skip everything without Git or a project manif
 
 Seven installation tests cover AppData/XDG paths and overrides, self-contained app copying and HTTP startup without the source checkout on module paths, absence of bundled dependencies/projects, state-preserving updates with application backups, refusal to replace a live coordinator, non-overwriting legacy state migration with retained originals and cross-version ownership locks, and installation/startup serialization with a centralized transfer cache. These are local filesystem and synthetic-state tests; no provider authentication files or real credentials are read or copied.
 
-## Live account checks
+### Live account checks
 
 Both CLI adapters completed real structured-response requests through existing subscription logins. Claude reported `claude-opus-5-5`.
 
@@ -41,7 +58,7 @@ Two opt-in live workflows passed in temporary Git projects using GPT-6 Luna and 
 
 These runs consumed subscription allowance. The ordinary automated test suite does not run them unless their environment flags are explicitly enabled.
 
-## Responsiveness update
+### Responsiveness update
 
 This update made questions stop reopening planning, ran independent agent steps in parallel, delivered the shared rules once per session, cached workspace file digests, reused the Codex app-server, streamed Claude tool progress to the dashboard, and fixed several reliability and accessibility problems. Afterwards the full suite on this Windows checkout had 204 tests: 199 passed, 2 were skipped, and 3 failed. Two failures need symlink permission (Windows developer mode or administrator rights), and one simulates a Unix socket path on Windows. A test helper that broke paths containing spaces was also fixed, which cleared most of the earlier legacy failures.
 
@@ -53,8 +70,8 @@ After a later round of fixes, the full suite had 207 tests: 203 passed, 4 were s
 
 ## Remaining verification limits
 
-Earlier Windows runs of the legacy test suite failed on shell handling of paths containing spaces, Windows ESM paths used without file URLs, symlink permissions, and platform assumptions. The most recent full-suite run recorded above had no failures; symlink tests still skip without administrator rights or Windows developer mode, and opt-in live tests skip unless their environment flags are set.
+Earlier Windows runs of the legacy test suite failed on shell handling of paths containing spaces, Windows ESM paths used without file URLs, symlink permissions, and platform assumptions. Symlink tests can skip without administrator rights or Windows developer mode, and opt-in live tests skip unless their environment flags are set. Historical counts above apply to their respective revisions.
 
-No visual or interactive browser QA was completed because the Browser integration reported that no browser was available. HTTP endpoint and static asset checks passed, but they do not replace that verification.
+The historical responsiveness update records a headless Chrome check with simulated agents. Other earlier Browser integration attempts, and the October 22 attempt, found no available browser. The headless check does not establish current visual QA or screen-reader compatibility. HTTP endpoint and static asset checks do not replace interactive verification.
 
 Git bundles, worktree preparation, and background worker verification were exercised locally. A read-only SSH check against a Linux VPS with strict host verification confirmed that Node.js, Git, and Claude Code were present. It did not verify Claude authentication, deploy the application, or complete a real SSH worker/provider end-to-end run; those checks remain outstanding.

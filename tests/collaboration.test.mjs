@@ -334,7 +334,16 @@ test("workspace revisions include the state of Git submodules", (t) => {
 	git(outer, "commit", "-qm", "outer");
 	const before = workspaceRevision(outer);
 	fs.writeFileSync(path.join(outer, "inner", "a.txt"), "changed\n");
-	assert.notEqual(workspaceRevision(outer), before);
+	const modified = workspaceRevision(outer);
+	assert.notEqual(modified, before);
+	fs.writeFileSync(path.join(outer, "inner", "a.txt"), "another change\n");
+	const edited = workspaceRevision(outer);
+	assert.notEqual(edited, modified);
+	fs.writeFileSync(path.join(outer, "inner", "untracked.txt"), "first\n");
+	const untracked = workspaceRevision(outer);
+	assert.notEqual(untracked, edited);
+	fs.writeFileSync(path.join(outer, "inner", "untracked.txt"), "second\n");
+	assert.notEqual(workspaceRevision(outer), untracked);
 });
 
 test("agents learn which files changed since their last turn", async (t) => {
