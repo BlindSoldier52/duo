@@ -425,8 +425,6 @@ export class CodexAppServerClient {
     const client = brokerEndpoint
       ? new BrokerCodexAppServerClient(cwd, { ...options, brokerEndpoint })
       : new SpawnedCodexAppServerClient(cwd, options);
-    // Before initialize: a stall during the handshake itself must already be
-    // attributed to this client's transport (see stall-watchdog.mjs).
     options.onClient?.(client);
     await client.initialize();
     return client;

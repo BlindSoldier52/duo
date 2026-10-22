@@ -26,7 +26,7 @@ test("the public Duo entry point rejects unsupported commands with an actionable
 });
 
 test("Duo user documentation, package metadata, and dashboard do not advertise the old product", () => {
-	for (const file of ["README.md", "guide.md", "plan.md", "docs/collaboration.md", "docs/safety.md", "docs/verification.md", "package.json", "package-lock.json", ".claude-plugin/marketplace.json", "plugins/codex/web/index.html"]) {
+	for (const file of ["README.md", "guide.md", "plan.md", "docs/collaboration.md", "docs/safety.md", "docs/verification.md", "package.json", "package-lock.json", "plugins/codex/web/index.html"]) {
 		assert.doesNotMatch(fs.readFileSync(new URL(`../${file}`, import.meta.url), "utf8"), oldBranding, file);
 	}
 	const manifest = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));

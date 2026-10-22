@@ -40,13 +40,6 @@ function makeVersionFixture() {
     name: "codex",
     version: "1.0.2"
   });
-  writeJson(path.join(root, ".claude-plugin", "marketplace.json"), {
-    plugins: [
-      {
-        name: "codex"
-      }
-    ]
-  });
 
   return root;
 }
